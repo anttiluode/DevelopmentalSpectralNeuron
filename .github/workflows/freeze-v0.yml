@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install
-        run: python -m pip install -e .
+        run: python -m pip install -e . pytest
       - name: Verify software
         run: pytest -q
       - name: Generate frozen receipt
