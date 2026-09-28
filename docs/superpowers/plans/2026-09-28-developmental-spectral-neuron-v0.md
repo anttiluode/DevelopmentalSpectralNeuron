@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a deterministic local developmental simulator in which temporal history grows a sparse weighted graph, then show whether that grown anatomy changes later diffusion, retains decodable history, and responds causally to a predeclared lesion/regrowth assay.
+**Goal:** Build a deterministic local developmental simulator in which temporal history grows a sparse weighted graph, then test whether that grown anatomy changes later diffusion, retains decodable history, develops task-aligned low-order structure, and responds causally to a predeclared lesion/regrowth assay.
 
-**Architecture:** A 2-D synthetic world drives local resonant growth tips with fast activity, medium resource, and slow structural persistence. Growth maintains both a stigmergic field and an explicit weighted graph; downstream modules compute Laplacian modes, matched diffusion probes, destructive controls, blind history readback, and lesion/regrowth receipts. The scientific runner freezes one v0 parameter set before multi-seed runs and never lets growth access global graph or spectral quantities.
+**Architecture:** A 2-D synthetic world drives local resonant growth tips with fast activity, medium resource, and slow structural persistence. Growth maintains both a stigmergic field and an explicit weighted graph; downstream modules compute Laplacian modes, matched diffusion probes, destructive controls, blind history readback, task-alignment/null comparisons, and lesion/regrowth receipts. The scientific runner freezes one v0 parameter set before multi-seed runs and never lets growth access global graph or spectral quantities.
 
 **Tech Stack:** Python 3.11+, NumPy, SciPy, Matplotlib (visualizer only), pytest.
 
@@ -13,489 +13,253 @@
 ## Global Constraints
 
 - Growth tips may use only local cue/resource/stigmergic neighborhoods plus their own state; no global graph metric, eigenmode, future lesion location, or target topology may influence growth.
-- Keep `field` (local stigmergic guidance/visualization) separate from the explicit computational graph.
+- Keep the stigmergic `field` separate from the explicit computational graph.
 - Three clocks have distinct jobs: fast resonant state, medium resource balance, slow edge strength/survival.
 - No gradient descent and no learned recurrent weights in v0.
 - The same frozen parameter set is used for `H_A`, `H_B`, lesion runs, and all multi-seed scientific runs.
 - `H_A` and `H_B` use the same spatial world and equal left/right exposure counts; they differ only in temporal ordering of resource epochs.
-- The first frozen scientific seed set is `0..7` (8 seeds per history/control arm).
+- First frozen scientific seed set: `0..7` (8 seeds per history/control arm).
 - Scientific gates may fail; failed gates are written to receipts and are not tuned away in the same run series.
-- Biological language stays within the claim boundary in the spec; variables are `resource`, `activity`, `structure`, not ATP/dopamine/neurotrophin analogues.
-- The first propagation model is low-frequency graph diffusion only; richer windowed/resonant propagation is explicitly deferred.
+- Biological language stays within the spec claim boundary; variables remain `resource`, `activity`, and `structure`.
+- First propagation model is low-frequency graph diffusion only; richer windowed/resonant propagation is deferred.
 
 ## Frozen v0 constants
 
-These values are fixed before the first multi-seed receipt and live in one immutable `V0Config` object:
+All values live in immutable `V0Config` before the first multi-seed receipt:
 
-- world grid: `64 x 64`, normalized continuous domain `[0,1] x [0,1]`
-- soma/root: `(0.50, 0.08)`
-- left target: `(0.25, 0.78)`, right target: `(0.75, 0.78)`, Gaussian sigma `0.11`
-- static cue field: equal attraction to both target Gaussians plus soft boundary repulsion; identical for both histories
+- domain `[0,1] x [0,1]`, world/field grid `64 x 64`
+- soma `(0.50, 0.08)`
+- left target `(0.25, 0.78)`, right target `(0.75, 0.78)`, Gaussian sigma `0.11`
+- static cue field: equal attraction to both targets plus soft boundary repulsion; identical for both histories
 - development: `12` epochs x `50` steps = `600` steps
-- `H_A`: alternating target schedule `L,R,L,R,...` for 12 epochs
-- `H_B`: blocked schedule `L,L,L,L,L,L,R,R,R,R,R,R`
-- both histories therefore contain exactly six left and six right resource epochs
-- initial tips: `4`, headings symmetrically spread around upward direction
-- maximum active tips: `48`
-- graph-node spacing along a branch: `0.025`
-- local merge radius: `0.035`
-- tip step length: `0.012`
-- field grid: same `64 x 64` raster as world
+- `H_A = L,R,L,R,L,R,L,R,L,R,L,R`
+- `H_B = L,L,L,L,L,L,R,R,R,R,R,R`
+- initial tips `4`; maximum active tips `48`
+- graph-node spacing `0.025`; local merge radius `0.035`; tip step `0.012`
 - field decay `rho_F = 0.997`
-- resonator persistence palette `r in {0.86, 0.90, 0.94, 0.97}` assigned cyclically at birth
-- resonator angular-frequency palette `omega in {0.08, 0.12, 0.18, 0.26}` radians/tick assigned cyclically at birth
-- resource initial `E0 = 1.0`, floor `0.0`, cap `2.0`
-- maintenance cost `c0 = 0.0015`, activity cost `c1 = 0.0008`
-- harvest gain `eta = 0.012`
-- branch threshold `E_branch = 1.35`, minimum productive age `35` steps, daughter heading perturbation `±0.35` rad seeded
-- edge initial weight `0.30`, productive reinforcement `+0.010`, per-step decay `0.9995`
-- prune threshold `0.06`, prune grace `120` steps
-- field-follow weight `w_f = 0.35`, cue weight `w_c = 1.0`, resource-gradient weight `w_r = 0.55`, curvature weight `w_k = 0.15`, exploration noise SD `0.08` before direction normalization
-- diffusion beta `0.75`; score at fixed times `t = [0.0, 0.25, 0.5, 1.0, 2.0]` using `scipy.linalg.expm`
-- spectral report: smallest `6` nontrivial modes when graph size permits
-- predeclared lesion band: edges crossing the vertical midline `x=0.50` with both endpoints at `y >= 0.55`
-- regrowth: `200` additional steps under the same local rules and a balanced alternating resource schedule; no special repair signal
+- resonator persistence palette `{0.86, 0.90, 0.94, 0.97}` cyclic at birth
+- resonator angular-frequency palette `{0.08, 0.12, 0.18, 0.26}` rad/tick cyclic at birth
+- resource `E0=1.0`, floor `0.0`, cap `2.0`
+- maintenance `c0=0.0015`; activity cost `c1=0.0008`; harvest gain `eta=0.012`
+- branch threshold `1.35`; minimum productive age `35`; daughter heading perturbation `±0.35` rad seeded
+- edge initial weight `0.30`; productive reinforcement `+0.010`; per-step decay `0.9995`
+- prune threshold `0.06`; prune grace `120`
+- movement weights: cue `1.0`, field `0.35`, resource-gradient `0.55`, curvature `0.15`; exploration SD `0.08` before direction normalization
+- diffusion beta `0.75`; score times `[0.0, 0.25, 0.5, 1.0, 2.0]` using `scipy.linalg.expm`
+- smallest `6` nontrivial modes when graph size permits
+- lesion: edges crossing `x=0.50` with both endpoints `y>=0.55`
+- regrowth `200` steps under balanced alternating resource schedule and the same local rules; no repair signal
 
-If Gate 0 shows that this set cannot create any viable soma-connected structure, a revised `V0Config` requires a documented engineering-fix commit and all scientific receipts restart from seed 0. No per-history tuning is allowed.
+If Gate 0 proves this set cannot create any viable soma-connected structure, a revised `V0Config` requires a documented engineering-fix commit and **all** scientific receipts restart from seed 0. Never tune per history or on lesion outcome.
 
 ## Review Focus
 
-1. **Pruning disconnects live structure from the soma:** graph mutation must never leave an active tip attached to a deleted/orphan node; tests in Task 3 pin this.
-2. **Near-degenerate eigenvalues make eigenvectors reorder or rotate:** comparisons must use sign-invariant vectors and subspace/projector distance for clustered modes; tests in Task 4 pin this.
-3. **A geometry-null generator silently changes wiring cost or disconnects the graph:** nulls must preserve node coordinates, edge count, approximate length histogram, nonnegative weights, and soma connectivity; tests in Task 6 pin this.
-4. **Diffusion scoring on disconnected/ill-conditioned graphs produces misleading transfer:** probe functions validate Laplacian shape, use matrix exponentials, conserve total mass for connected undirected graphs, and explicitly report components; tests in Task 5 pin this.
-5. **Lesion selection becomes post-hoc:** lesion code accepts only the frozen geometric band from `V0Config`; tests in Task 7 prove it does not inspect edge centrality, eigenvectors, or observed damage magnitude.
+1. **Pruning disconnects live structure from soma:** Task 3 pins atomic retirement/reconnection behavior; no orphan active tips.
+2. **Near-degenerate eigenvalues reorder/rotate modes:** Task 4 uses sign-invariant comparison and projector/subspace distance for clustered modes.
+3. **Geometry-null changes wiring cost or connectivity:** Task 6 preserves node coordinates, edge count, approximate length histogram, nonnegative weights, and soma connectivity.
+4. **Disconnected/invalid graphs fool diffusion scoring:** Task 5 validates graph/Laplacian assumptions and explicitly reports components.
+5. **Lesion selection becomes post-hoc:** Task 7 accepts only the frozen geometric lesion band and never reads centrality/eigenmodes/damage magnitude.
 
 ---
 
-### Task 1: Package, frozen configuration, and matched developmental histories
+### Task 1: Package, frozen configuration, and matched histories
 
 **Files:**
 - Create: `pyproject.toml`
 - Create: `src/devspectral/__init__.py`
 - Create: `src/devspectral/config.py`
 - Create: `src/devspectral/world.py`
-- Create: `tests/test_world.py`
+- Test: `tests/test_world.py`
 
 **Interfaces:**
-- Produces: `V0Config` frozen dataclass and `V0 = V0Config()`.
-- Produces: `HistoryId = Literal["H_A", "H_B"]`.
-- Produces: `DevelopmentalWorld(config: V0Config)` with `cue_and_gradient(pos)`, `resource_and_gradient(pos, step, history)`, and `stimulus(pos, step, history)`.
-- Produces: `epoch_schedule(history: HistoryId, config: V0Config) -> tuple[str, ...]`.
+- `V0Config` frozen dataclass; `V0 = V0Config()`
+- `HistoryId = Literal["H_A", "H_B"]`
+- `epoch_schedule(history, config) -> tuple[str, ...]`
+- `DevelopmentalWorld(config)` with `cue_and_gradient(pos)`, `resource_and_gradient(pos, step, history)`, `stimulus(pos, step, history)`
 
-- [ ] **Step 1: Write failing tests for frozen constants and matched schedules**
-
-Tests assert: grid `64`, total steps `600`, `H_A` alternates, `H_B` blocks, each contains exactly six `L` and six `R`, and the static cue field sampled at fixed points is identical between histories.
-
-- [ ] **Step 2: Run the focused tests and confirm RED**
-
-Run: `pytest tests/test_world.py -q`
-
-Expected: FAIL because package/config/world do not exist.
-
-- [ ] **Step 3: Implement package metadata, `V0Config`, schedules, and analytic local fields**
-
-Use analytic Gaussian target fields so gradients are exact and local; `resource_and_gradient` activates only the scheduled target while preserving equal epoch counts across histories. `stimulus` is a deterministic sinusoid localized by the active resource Gaussian and must not expose history ID directly.
-
-- [ ] **Step 4: Run focused tests and confirm GREEN**
-
-Run: `pytest tests/test_world.py -q`
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add pyproject.toml src/devspectral tests/test_world.py
-git commit -m "feat: define frozen developmental world"
-```
+- [ ] Write tests asserting all frozen constants, exact schedules, six L/six R exposures in each history, identical static cue samples, and deterministic stimulus values.
+- [ ] Run `pytest tests/test_world.py -q`; expect RED because package/world do not exist.
+- [ ] Implement package metadata, frozen config, analytic Gaussian fields/gradients, schedules, and deterministic localized sinusoidal stimulus. History ID must not be exposed as a direct feature.
+- [ ] Run `pytest tests/test_world.py -q`; expect PASS.
+- [ ] Commit: `feat: define frozen developmental world`.
 
 ### Task 2: Explicit weighted graph and local growth state
 
 **Files:**
 - Create: `src/devspectral/graph.py`
 - Create: `src/devspectral/growth.py`
-- Create: `tests/test_growth_core.py`
+- Test: `tests/test_growth_core.py`
 
 **Interfaces:**
-- Consumes: `V0Config`, `DevelopmentalWorld`.
-- Produces: `GraphState` with node positions, undirected weighted edges, edge age/traffic/last-use, soma node id, and connectivity helpers.
-- Produces: `GrowthTip` dataclass with `tip_id`, `node_id`, `position`, `heading`, `q: np.ndarray(shape=(2,))`, `resource`, `age`, `productive_age`, `parent_tip_id | None`, `alive`.
-- Produces: `DevelopmentSimulator(config, history, seed, control="full")` with `step()`, `run(steps=None)`, `snapshot()`.
+- `GraphState`: positions, undirected weighted edges, edge age/traffic/last-use, soma id, connectivity helpers
+- `GrowthTip`: `tip_id`, `node_id`, `position`, `heading`, `q:(2,)`, `resource`, `age`, `productive_age`, `parent_tip_id`, `alive`
+- `DevelopmentSimulator(config, history, seed, control="full")` with `step()`, `run(steps=None)`, `snapshot()`
 
-- [ ] **Step 1: Write failing tests for resonator update, resource update, local-only movement, and graph symmetry**
+- [ ] Write tests for exact two-state resonator rotation, resource clipping `[0,2]`, movement step bound, deterministic RNG, graph symmetry/nonnegative weights, and a direction-selection signature that receives only local values and tip state—not graph-spectrum objects.
+- [ ] Run `pytest tests/test_growth_core.py -q`; expect RED.
+- [ ] Implement `GraphState`, `GrowthTip`, one-step resonator/resource dynamics, and local direction combination. Keep one `np.random.Generator` per simulator.
+- [ ] Run focused tests; expect PASS.
+- [ ] Commit: `feat: add local resonant growth core`.
 
-Tests assert deterministic two-state rotation update, resource clipping to `[0, 2]`, movement step length bound, undirected edge symmetry, nonnegative weights, and no graph/spectrum object is passed into tip direction selection.
-
-- [ ] **Step 2: Run the focused tests and confirm RED**
-
-Run: `pytest tests/test_growth_core.py -q`
-
-Expected: FAIL with missing graph/growth modules.
-
-- [ ] **Step 3: Implement `GraphState`, `GrowthTip`, and one-step local dynamics**
-
-Direction combines normalized local cue gradient, local field gradient placeholder (zero until Task 3), local resource gradient, curvature penalty, and seeded exploration. Keep all random draws on one `np.random.Generator` owned by the simulator.
-
-- [ ] **Step 4: Run focused tests and confirm GREEN**
-
-Run: `pytest tests/test_growth_core.py -q`
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/devspectral/graph.py src/devspectral/growth.py tests/test_growth_core.py
-git commit -m "feat: add local resonant growth core"
-```
-
-### Task 3: Stigmergic field, branching, reinforcement, and pruning
+### Task 3: Stigmergic field, branching, reinforcement, pruning, Gate-0 invariants
 
 **Files:**
 - Create: `src/devspectral/field.py`
 - Modify: `src/devspectral/growth.py`
 - Modify: `src/devspectral/graph.py`
-- Create: `tests/test_structure.py`
+- Test: `tests/test_structure.py`
 
 **Interfaces:**
-- Produces: `StructuralField(config)` with `sample_and_gradient(pos)`, `decay()`, `deposit_segment(p0, p1, amount)`.
-- Extends: `DevelopmentSimulator.step()` to deposit useful structure, reinforce traversed edges, branch locally, merge locally, decay/prune edges, and keep active tips soma-connected.
-- Produces: `validate_invariants() -> list[str]` returning an empty list for a valid state.
+- `StructuralField(config)` with `sample_and_gradient`, `decay`, `deposit_segment`
+- extended `DevelopmentSimulator.step()` for deposition/reinforcement/branch/merge/prune
+- `validate_invariants() -> list[str]`
 
-- [ ] **Step 1: Write failing tests for deposition/decay, branching cap, local merge, pruning, and soma-connectivity invariants**
+- [ ] Write tests for field deposition/decay, bounded field attraction, branch cap, local merge radius, edge reinforcement/decay/pruning, graph indices, nonnegative weights, and all active structural components connected to soma.
+- [ ] Add Review-Focus regression: force a below-threshold edge supporting an active descendant; pruning must retain the path or retire/re-home dependent tips atomically—never orphan them.
+- [ ] Add determinism regression: identical seed+history for a short run yields byte-equivalent serialized graph/field/tips; different seed yields a finite valid but not necessarily identical state.
+- [ ] Run `pytest tests/test_structure.py -q`; expect RED.
+- [ ] Implement bilinear field sampling, Gaussian segment deposition, local branch/merge, edge usage/reinforcement, grace-period pruning, invariant validation.
+- [ ] Run Tasks 1-3 tests; expect PASS.
+- [ ] Commit: `feat: grow and prune stigmergic anatomy`.
 
-Include the Review Focus regression: force an edge below prune threshold while an active descendant tip depends on it; pruning must either retain the required path or retire/re-home the dependent tip atomically—never leave an orphaned active tip.
-
-- [ ] **Step 2: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_structure.py -q`
-
-Expected: FAIL because structural field/slow mutation is absent.
-
-- [ ] **Step 3: Implement slow structural dynamics**
-
-Use bilinear field sampling and small Gaussian segment deposition; bound field attraction before combining directions. Branch only from local resource/productivity criteria. A merge may connect nodes only within `merge_radius`; it must not inspect global shortest paths or spectral metrics.
-
-- [ ] **Step 4: Run Tasks 1-3 tests**
-
-Run: `pytest tests/test_world.py tests/test_growth_core.py tests/test_structure.py -q`
-
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/devspectral/field.py src/devspectral/growth.py src/devspectral/graph.py tests/test_structure.py
-git commit -m "feat: grow and prune stigmergic anatomy"
-```
-
-### Task 4: Laplacian, eigenmodes, and robust spectral comparison
+### Task 4: Laplacian, eigenmodes, robust spectral comparison
 
 **Files:**
 - Create: `src/devspectral/spectral.py`
-- Create: `tests/test_spectral.py`
+- Test: `tests/test_spectral.py`
 
 **Interfaces:**
-- Consumes: `GraphState`.
-- Produces: `weighted_adjacency(graph) -> np.ndarray`.
-- Produces: `laplacian(graph) -> np.ndarray`.
-- Produces: `low_modes(graph, k=6) -> Spectrum` with sorted eigenvalues/eigenvectors and connected-component count.
-- Produces: `mode_alignment(a, b)`, `subspace_distance(U, V)`, `spectral_signature(spectrum)`.
+- `weighted_adjacency(graph) -> np.ndarray`
+- `laplacian(graph) -> np.ndarray`
+- `low_modes(graph, k=6) -> Spectrum`
+- `mode_alignment(a,b)`, `subspace_distance(U,V)`, `spectral_signature(spectrum)`
 
-- [ ] **Step 1: Write failing tests on hand-built path, cycle, and two-lobe graphs**
-
-Assert Laplacian symmetry/PSD, one zero eigenvalue for connected graphs, `lambda2 > 0`, sign-invariant mode alignment, and correct ordering.
-
-- [ ] **Step 2: Add the near-degenerate-mode Review Focus regression**
-
-Construct a graph with a repeated/near-repeated eigenspace, rotate its basis internally, and assert projector/subspace distance is ~0 although naive column-wise eigenvector comparison is not.
-
-- [ ] **Step 3: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_spectral.py -q`
-
-Expected: FAIL because spectral module is absent.
-
-- [ ] **Step 4: Implement dense NumPy/SciPy spectral utilities**
-
-Use `scipy.linalg.eigh`. Compare clustered modes through orthogonal projectors/principal angles when adjacent eigenvalue gap is `< 1e-7 * max(1, |lambda|)`.
-
-- [ ] **Step 5: Run focused tests and confirm GREEN; commit**
-
-Run: `pytest tests/test_spectral.py -q`
-
-Expected: PASS.
-
-```bash
-git add src/devspectral/spectral.py tests/test_spectral.py
-git commit -m "feat: add robust graph spectral analysis"
-```
+- [ ] Write tests on hand-built path/cycle/two-lobe graphs: symmetric PSD Laplacian, connected graph has one zero eigenvalue, positive `lambda2`, sorted values, sign-invariant alignment.
+- [ ] Add near-degenerate regression: rotate basis inside a repeated eigenspace; projector/subspace distance must remain ~0 although naive column comparison changes.
+- [ ] Run `pytest tests/test_spectral.py -q`; expect RED.
+- [ ] Implement with `scipy.linalg.eigh`; group adjacent modes when eigenvalue gap `<1e-7*max(1,|lambda|)` and compare grouped subspaces with projectors/principal angles.
+- [ ] Run focused tests; expect PASS.
+- [ ] Commit: `feat: add robust graph spectral analysis`.
 
 ### Task 5: Matched post-development diffusion probes
 
 **Files:**
 - Create: `src/devspectral/probe.py`
-- Create: `tests/test_probe.py`
+- Test: `tests/test_probe.py`
 
 **Interfaces:**
-- Consumes: `GraphState`, `Spectrum`, `V0Config`.
-- Produces: `ProbeSpec(source_center, source_radius, readout_center, readout_radius)`.
-- Produces: `diffusion_trajectory(graph, probe, times, beta) -> ProbeResult` using `scipy.linalg.expm(-beta * L * t)`.
-- Produces: `probe_distance(a, b) -> float` and transfer/arrival summaries.
+- `ProbeSpec(source_center, source_radius, readout_center, readout_radius)`
+- `diffusion_trajectory(graph, probe, times, beta) -> ProbeResult`
+- `probe_distance(a,b) -> float`
 
-- [ ] **Step 1: Write failing tests for identical-graph reproducibility and mass conservation**
+- [ ] Write tests for identical-graph reproducibility, finite trajectories, exact mass conservation within tolerance for connected undirected graphs, and expected slower transfer on a path than on a path plus shortcut.
+- [ ] Add disconnected/invalid Review-Focus tests: component metadata required; no false cross-component arrival; asymmetric/negative-weight malformed input raises `ValueError`.
+- [ ] Run `pytest tests/test_probe.py -q`; expect RED.
+- [ ] Implement exact `expm(-beta*L*t)` propagation. Freeze source around left target and readout around right target independent of history/seed.
+- [ ] Run focused tests; expect PASS.
+- [ ] Commit: `feat: add matched diffusion probe`.
 
-Use small hand-built connected graphs. Assert same graph/probe gives identical result and total mass stays constant within numerical tolerance.
-
-- [ ] **Step 2: Add disconnected/invalid-graph Review Focus tests**
-
-Disconnected graph must return component metadata and finite trajectories rather than silently reporting cross-component arrival; malformed/asymmetric/negative-weight graphs must raise `ValueError` before propagation.
-
-- [ ] **Step 3: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_probe.py -q`
-
-Expected: FAIL because probe module is absent.
-
-- [ ] **Step 4: Implement exact matrix-exponential propagation and summaries**
-
-Use one frozen probe definition: inject around left target and read around right target. Keep probe independent of history and seed.
-
-- [ ] **Step 5: Run focused tests and commit**
-
-Run: `pytest tests/test_probe.py -q`
-
-Expected: PASS.
-
-```bash
-git add src/devspectral/probe.py tests/test_probe.py
-git commit -m "feat: add matched diffusion probe"
-```
-
-### Task 6: Destructive developmental and graph controls
+### Task 6: Destructive controls and geometry-matched nulls
 
 **Files:**
 - Create: `src/devspectral/controls.py`
 - Modify: `src/devspectral/growth.py`
-- Create: `tests/test_controls.py`
+- Test: `tests/test_controls.py`
 
 **Interfaces:**
-- Produces developmental control names: `full`, `no_stigmergy`, `no_metabolic_selection`, `no_pruning`.
-- Produces graph controls: `geometry_null(graph, seed)`, `weight_shuffle(graph, seed)`, `fixed_lattice(config, node_budget, edge_budget, seed)`.
+- developmental arms: `full`, `no_stigmergy`, `no_metabolic_selection`, `no_pruning`
+- graph arms: `geometry_null(graph, seed)`, `weight_shuffle(graph, seed)`, `fixed_lattice(config, node_budget, edge_budget, seed)`
 
-- [ ] **Step 1: Write failing tests proving each developmental control changes exactly its declared mechanism**
+- [ ] Test that each developmental control disables only its declared mechanism: no-stigmergy ignores field gradient but may still deposit; no-metabolic-selection removes usefulness dependence from continuation/branch opportunity but preserves costs/geometry; no-pruning decays weights but suppresses deletion.
+- [ ] Geometry-null tests: same node coordinates, edge count, nonnegative weights, soma connectivity, and fixed 8-bin edge-length histogram counts within one edge of source per bin over `[0,sqrt(2)]`.
+- [ ] Weight-shuffle test preserves topology and weight multiset. Fixed-lattice test respects requested node/edge budget within construction feasibility.
+- [ ] Run `pytest tests/test_controls.py -q`; expect RED.
+- [ ] Implement seeded controls. Geometry null gets at most 200 reconstruction attempts then raises `RuntimeError`; never silently relax matching constraints.
+- [ ] Run focused tests; expect PASS.
+- [ ] Commit: `feat: add developmental and graph null controls`.
 
-Examples: `no_stigmergy` forces field-gradient contribution to zero but still deposits field; `no_metabolic_selection` removes usefulness dependence from growth resource but leaves costs/geometry; `no_pruning` leaves edge weights decaying but suppresses deletion.
-
-- [ ] **Step 2: Write geometry-null Review Focus tests**
-
-Assert same node coordinates, same edge count, connected-to-soma graph, nonnegative weights, and edge-length histogram counts within one bin of the source graph using fixed 8-bin edges over `[0, sqrt(2)]`.
-
-- [ ] **Step 3: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_controls.py -q`
-
-Expected: FAIL because controls do not exist.
-
-- [ ] **Step 4: Implement controls without sharing scientific outputs back into growth**
-
-Geometry null uses seeded length-bin-preserving edge swaps/reconstruction with bounded retry count; if a connected null cannot be produced after 200 attempts, raise a clear `RuntimeError` rather than silently relaxing constraints.
-
-- [ ] **Step 5: Run focused tests and commit**
-
-Run: `pytest tests/test_controls.py -q`
-
-Expected: PASS.
-
-```bash
-git add src/devspectral/controls.py src/devspectral/growth.py tests/test_controls.py
-git commit -m "feat: add developmental and graph null controls"
-```
-
-### Task 7: Lesion and local regrowth assay
+### Task 7: Predeclared lesion and local regrowth
 
 **Files:**
 - Create: `src/devspectral/lesion.py`
-- Create: `tests/test_lesion.py`
+- Test: `tests/test_lesion.py`
 
 **Interfaces:**
-- Consumes: grown `DevelopmentSimulator` / `GraphState`, `V0Config` lesion band.
-- Produces: `lesion_midline_band(graph, config) -> LesionResult`.
-- Produces: `resume_regrowth(simulator, steps=200) -> DevelopmentSnapshot`.
+- `lesion_midline_band(graph, config) -> LesionResult`
+- `resume_regrowth(simulator, steps=200) -> DevelopmentSnapshot`
 
-- [ ] **Step 1: Write failing test for frozen geometric lesion selection**
+- [ ] Write Review-Focus test with high-centrality edges inside/outside lesion band; only geometrically qualifying midline edges are removed, unchanged by attached/permuted centrality or spectral metadata.
+- [ ] On hand-built two-lobe bridge graph, lesion must lower `lambda2` and left-to-right transfer.
+- [ ] Run `pytest tests/test_lesion.py -q`; expect RED.
+- [ ] Implement lesion from frozen geometry only. Regrowth reuses original local rules and balanced alternating schedule; no repair signal or lesion-location feature. Record new band-crossing edges.
+- [ ] Run focused tests; expect PASS.
+- [ ] Commit: `feat: add predeclared lesion and local regrowth`.
 
-Create graphs with high-centrality edges both inside and outside the band. Assert only edges geometrically crossing `x=0.50` with both endpoints `y>=0.55` are removed; lesion result must be unchanged if edge centrality/eigenvector metadata is attached or permuted.
-
-- [ ] **Step 2: Write lesion effect tests on a hand-built two-lobe bridge graph**
-
-Assert lesion lowers `lambda2` and decreases left-to-right probe transfer; exact numeric values need not be hard-coded beyond direction/tolerance.
-
-- [ ] **Step 3: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_lesion.py -q`
-
-Expected: FAIL because lesion module is absent.
-
-- [ ] **Step 4: Implement lesion and regrowth plumbing**
-
-Regrowth reuses the original local simulator rules with the frozen balanced alternating schedule and no repair/lesion-location signal. Record whether any new edge crosses the lesion band.
-
-- [ ] **Step 5: Run focused tests and commit**
-
-Run: `pytest tests/test_lesion.py -q`
-
-Expected: PASS.
-
-```bash
-git add src/devspectral/lesion.py tests/test_lesion.py
-git commit -m "feat: add predeclared lesion and local regrowth"
-```
-
-### Task 8: Scientific gate runner, blind history readback, and receipts
+### Task 8: Scientific metrics, Gate 0-5 receipts, history readback, and spectral compactness
 
 **Files:**
 - Create: `src/devspectral/experiment.py`
 - Create: `src/devspectral/receipt.py`
 - Create: `scripts/run_v0.py`
-- Create: `tests/test_experiment.py`
+- Test: `tests/test_experiment.py`
 
 **Interfaces:**
-- Produces: `run_one(history, seed, control="full") -> RunRecord`.
-- Produces: `run_gate_suite(seeds=range(8)) -> GateReceipt`.
-- Produces: `history_features(record) -> np.ndarray` using anatomy/spectrum only.
-- Produces: `nearest_centroid_leave_one_seed_out(records) -> ReadbackResult`.
-- Produces JSON-safe `to_dict()` receipts and compact graph serialization (`positions`, edge index pairs, weights).
+- `run_one(history, seed, control="full") -> RunRecord`
+- `run_gate_suite(seeds=range(8)) -> GateReceipt`
+- `history_features(record) -> np.ndarray`
+- `nearest_centroid_leave_one_seed_out(records) -> ReadbackResult`
+- `task_alignment(record) -> AlignmentResult`
+- JSON-safe receipts and compact graph serialization (`positions`, edge pairs, weights)
 
-- [ ] **Step 1: Write failing end-to-end smoke tests on two seeds**
+- [ ] Write two-seed end-to-end RED smoke tests: deterministic same-seed equality; valid invariants; serializable graph/spectrum/probe; readback features contain anatomy/spectrum only, not developmental schedule/log labels.
+- [ ] Pin **Gate 0**: for every arm/seed, record invariant failures, component count, NaN count, negative weight count, orphan tip count, graph size. Gate 0 passes only when all full-arm runs are valid and rerunning one fixed seed/history reproduces graph+spectrum exactly.
+- [ ] Pin **Gate 1** developmental specificity. Structural feature vector = normalized first six nontrivial eigenvalues (zero padded) + node/edge count + total edge length + mean/SD edge weight + fixed `4x4` spatial edge-density histogram. `structural_separation_ratio = median(between) / max(eps,median(within))`. Pass when at least 6/8 matched cross-history distances exceed the 75th percentile of pooled within-history distances and ratio >1.
+- [ ] Pin **Gate 2** same-present/different-history operator test. Compute probe separation on flattened fixed-time trajectories; pass with the same 6/8-vs-within rule. Zeroing all tip fast states before probing must leave the graph-based probe result unchanged. A graph-swap helper must demonstrate that response follows graph, not history label.
+- [ ] Pin **Gate 3** controls. A control materially weakens an effect if its Gate-1 or Gate-2 separation ratio is at least 25% lower than full. Overall scientific status cannot be `supported` unless at least one declared destructive control weakens a primary effect.
+- [ ] Pin **Gate 4** blind readback. Features are the structural vector above; leave-one-seed-out nearest-centroid accuracy `>=0.75` marks readback pass. Require at least one destructive control to reduce readback accuracy or record the readback evidence as non-specific.
+- [ ] Pin **Gate 5** lesion/regrowth. Per seed record pre-lesion/lesion/regrowth `lambda2`, component count, transfer, and new crossing edges. Lesion direction is observed when both `lambda2` and transfer decrease in at least 6/8 full-arm seeds. Regrowth status is `partial_recovery`, `no_recovery`, or `not_applicable`; no-recovery is a scientific result, not a software failure.
+- [ ] Add **spectral compactness/task-alignment test** from spec section 18. Define fixed task function `g(x,y)=sign(x-0.5)` on graph nodes (left/right axis, predeclared from world geometry). Measure squared projection fraction of centered `g` into first `k=3` nontrivial modes. Compare full developed graphs to `geometry_null` and `weight_shuffle` for the same graph/seed. Report `alignment_gain = full_alignment - median(null_alignments)` and within-history subspace stability using projector distance. Never use diffusion reconstruction alone as evidence because that would be tautological.
+- [ ] Run `pytest tests/test_experiment.py -q`; expect RED.
+- [ ] Implement runner/receipt schema and all metrics without parameter search.
+- [ ] Run `pytest -q`; expect all PASS.
+- [ ] Commit: `feat: add frozen scientific gate suite`.
 
-Assert deterministic rerun equality for same history/seed, valid invariants, serializable graph, spectrum, matched probe metrics, and no developmental log fields in readback features.
-
-- [ ] **Step 2: Pin Gate 1 and Gate 2 metrics**
-
-Define `structural_separation_ratio = median(between-history distance) / max(eps, median(within-history distance))` using a composite of normalized low eigenvalues + spatial edge-density summary. Gate 1 reports `pass` if at least 6/8 matched cross-history distances exceed the 75th percentile of pooled within-history distances and ratio > 1.0.
-
-Define `probe_separation_ratio` analogously on flattened probe trajectories. Gate 2 reports `pass` if at least 6/8 matched cross-history probe distances exceed the 75th percentile of within-history distances; rerunning the probe after zeroing all tip fast states must produce the same graph-based trajectory.
-
-- [ ] **Step 3: Pin Gate 4 readback and control weakening metrics**
-
-Readback features: first six nontrivial eigenvalues padded with zeros, node count, edge count, total edge length, mean/SD edge weight, and a fixed `4x4` spatial edge-density histogram. Leave-one-seed-out nearest centroid must reach `>= 0.75` accuracy to mark readback `pass`.
-
-A destructive control is recorded as materially weakening an effect if its separation ratio is at least `25%` lower than full. The suite requires at least one weakening control for the overall v0 scientific status to be `supported`; otherwise report `inconclusive` even if raw history separation is present.
-
-- [ ] **Step 4: Pin Gate 5 lesion/regrowth receipt semantics**
-
-For each seed record pre-lesion, lesion, and regrowth `lambda2`, component count, transfer, and number of new band-crossing edges. Lesion direction is considered observed when `lambda2` and transfer both decrease in at least 6/8 seeds. Regrowth is reported as `partial_recovery`, `no_recovery`, or `not_applicable`; failure is not converted into a failed software test.
-
-- [ ] **Step 5: Run focused tests and confirm RED**
-
-Run: `pytest tests/test_experiment.py -q`
-
-Expected: FAIL because experiment/receipt modules are absent.
-
-- [ ] **Step 6: Implement runner and receipt schema**
-
-Do not add parameter search. Scientific status is computed from the predeclared rules above and stored alongside raw per-seed values.
-
-- [ ] **Step 7: Run all tests and commit**
-
-Run: `pytest -q`
-
-Expected: all tests PASS.
-
-```bash
-git add src/devspectral/experiment.py src/devspectral/receipt.py scripts/run_v0.py tests/test_experiment.py
-git commit -m "feat: add frozen scientific gate suite"
-```
-
-### Task 9: Diagnostic visualizer and project documentation
+### Task 9: Diagnostic visualizer and documentation
 
 **Files:**
 - Create: `src/devspectral/visualize.py`
 - Create: `scripts/visualize_run.py`
 - Create: `README.md`
-- Create: `tests/test_visualize.py`
+- Test: `tests/test_visualize.py`
 
 **Interfaces:**
-- Consumes: serialized `RunRecord` / graph snapshots.
-- Produces: `render_snapshot(record, layer, output_path=None)` for `field`, `graph`, `usage`, `mode1`, `mode2`, `mode3`, `probe`, `lesion`.
+- `render_snapshot(record, layer, output_path=None)` for `field`, `graph`, `usage`, `mode1`, `mode2`, `mode3`, `probe`, `lesion`
 
-- [ ] **Step 1: Write failing headless visualizer smoke tests**
+- [ ] With Matplotlib `Agg`, write RED smoke tests rendering every layer from a tiny record and asserting no mutation of source data.
+- [ ] Implement two-pane diagnostic renderer: developmental field/graph on left or source snapshot; graph/modes/probe/lesion layer on right. Visualization is never a gate.
+- [ ] README must state claim boundary, exact H_A/H_B schedules, frozen-v0 discipline, run commands, and that spectral pictures alone are not evidence.
+- [ ] Run `pytest -q`; expect PASS.
+- [ ] Commit: `docs: add developmental spectral neuron visualizer`.
 
-With Matplotlib `Agg`, render each supported layer from a tiny synthetic record and assert a figure is produced without mutating the record.
-
-- [ ] **Step 2: Run focused test and confirm RED**
-
-Run: `pytest tests/test_visualize.py -q`
-
-Expected: FAIL because visualizer does not exist.
-
-- [ ] **Step 3: Implement diagnostic renderer and README**
-
-README must state the claim boundary, frozen v0 history schedules, how to run tests/scientific suite/visualizer, and that visual beauty is not a scientific gate.
-
-- [ ] **Step 4: Run full verification and commit**
-
-Run: `pytest -q`
-
-Expected: all tests PASS.
-
-```bash
-git add src/devspectral/visualize.py scripts/visualize_run.py README.md tests/test_visualize.py
-git commit -m "docs: add developmental spectral neuron visualizer"
-```
-
-### Task 10: Freeze and run the first v0 scientific receipt
+### Task 10: Freeze and run first v0 scientific receipt
 
 **Files:**
 - Create: `results/v0_receipt.json`
 - Create: `docs/V0_STATUS.md`
 - Modify: `README.md`
 
-**Interfaces:**
-- Consumes: exact tested code and frozen `V0` config from Tasks 1-9.
-- Produces: one immutable first-run receipt over seeds `0..7` and all declared controls.
-
-- [ ] **Step 1: Run fresh software verification before science**
-
-Run: `pytest -q`
-
-Expected: all tests PASS.
-
-- [ ] **Step 2: Run the frozen suite once**
-
-Run: `python scripts/run_v0.py --output results/v0_receipt.json`
-
-Expected: exits 0, writes all per-seed raw records and gate summaries; scientific gates may be supported, inconclusive, or negative.
-
-- [ ] **Step 3: Validate receipt without changing parameters**
-
-Run: `python scripts/run_v0.py --check-receipt results/v0_receipt.json`
-
-Expected: schema/invariant check PASS and frozen config hash matches `V0`.
-
-- [ ] **Step 4: Write `docs/V0_STATUS.md` from the receipt**
-
-Report what held, what failed, controls, lesion/regrowth result, and biological claim boundary. Do not rerun after seeing results unless fixing a documented software/engineering defect; any such fix invalidates and replaces the entire scientific receipt.
-
-- [ ] **Step 5: Final verification**
-
-Run: `python -m compileall -q src scripts && pytest -q`
-
-Expected: exit 0 and all tests PASS.
-
-- [ ] **Step 6: Commit frozen receipt and status**
-
-```bash
-git add results/v0_receipt.json docs/V0_STATUS.md README.md
-git commit -m "results: freeze developmental spectral neuron v0"
-```
+- [ ] Fresh software gate: run `python -m compileall -q src scripts && pytest -q`; require exit 0.
+- [ ] Run exactly once on the frozen set: `python scripts/run_v0.py --output results/v0_receipt.json` over seeds `0..7` and all declared controls/nulls.
+- [ ] Validate without re-running development: `python scripts/run_v0.py --check-receipt results/v0_receipt.json`; require schema/invariant/config-hash PASS.
+- [ ] Write `docs/V0_STATUS.md` directly from receipt: Gate 0-5 outcomes, spectral alignment/null result, controls, lesion/regrowth, what died, what survived, biological claim boundary.
+- [ ] Do **not** tune after reading results. A genuine engineering bug requires a documented fix commit, invalidation of the old receipt, and a complete fresh run from seed 0.
+- [ ] Run final `python -m compileall -q src scripts && pytest -q`; require exit 0.
+- [ ] Commit: `results: freeze developmental spectral neuron v0`.
 
 ## Execution notes
 
-- Implementation should occur on an isolated feature branch/worktree created from the approved-plan commit.
-- Use RED -> GREEN TDD for every task above.
-- Do not tune scientific constants after Task 8 except under the explicit Gate-0 engineering-fix rule; if changed, restart all multi-seed receipts.
-- Preserve negative scientific outcomes exactly. A software-complete branch may legitimately conclude that the developmental mechanism is unsupported under v0.
-- Before handoff or merge, run a whole-branch review specifically for hidden global information in local growth, control fairness, history leakage into readback/probes, post-hoc lesion selection, and numerical spectral/diffusion errors.
+- Implement on an isolated feature branch/worktree created from the approved-plan commit.
+- Use RED -> GREEN TDD for every task.
+- Do not tune scientific constants after Task 8 except under the explicit Gate-0 engineering-fix rule; a change restarts all multi-seed receipts.
+- Preserve negative outcomes exactly. A software-complete branch may legitimately conclude that the developmental mechanism is unsupported under v0.
+- Before handoff or merge, whole-branch review must specifically check hidden global information in local growth, control fairness, history leakage into readback/probes, spectral comparison under degeneracy, post-hoc lesion selection, and numerical diffusion errors.
