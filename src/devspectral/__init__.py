@@ -1,0 +1,1 @@
+"""Developmental Spectral Neuron."""

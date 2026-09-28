@@ -1,0 +1,47 @@
+name: Freeze v0 receipt
+
+on:
+  push:
+    branches:
+      - feature/devspectral-v0
+    paths-ignore:
+      - results/v0_receipt.json
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/devspectral-v0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install -e .
+      - name: Verify software
+        run: pytest -q
+      - name: Generate frozen receipt
+        run: python scripts/run_v0.py --output results/v0_receipt.json
+      - name: Check receipt
+        run: python scripts/run_v0.py --check-receipt results/v0_receipt.json
+      - name: Minify receipt
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('results/v0_receipt.json')
+          p.write_text(json.dumps(json.loads(p.read_text()), sort_keys=True, separators=(',', ':')) + '\n')
+          PY
+      - name: Commit receipt
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add results/v0_receipt.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'results: freeze developmental spectral neuron v0 receipt'
+            git push origin HEAD:feature/devspectral-v0
+          fi
